@@ -2,12 +2,16 @@ package linux
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go/service/iam"
+	"iam-ec2-authenticator/pkg/authiam"
 	"io/ioutil"
+	"os/exec"
 	"strconv"
 	"strings"
 )
 
-const passwdFile = "/etc/passwd"
+const PasswdFile = "/etc/passwd"
+const DefaultShell = "/bin/bash"
 
 // EtcPasswdEntry contains a single line entry representing a parse user from /etc/passwd in linux. An example line
 // form this file looks like:
@@ -68,4 +72,43 @@ func GetLinuxUsers(file string) ([]EtcPasswdEntry, error) {
 	}
 
 	return EtcPasswdEntries, nil
+}
+
+//UserTrueUp determines if any work needs to be done depending on the the results from IAM.
+// It accepts a slice of EtcPasswdEntries as well as the IAM Group Output from the AWS SDK Package.
+func UserTrueUp(linuxUsers []EtcPasswdEntry, iamUsers iam.GetGroupOutput, svc *iam.IAM) {
+	var newUser, existingUser []string
+
+	for _, iamUser := range iamUsers.Users {
+		foundUser := 0
+		for _, linuxUser := range linuxUsers {
+			// User is found. Add it to slice of managed users.
+			if linuxUser.username == *iamUser.UserName {
+				foundUser = 1
+				existingUser = append(existingUser, *iamUser.UserName)
+			}
+		}
+		// User not found. Add it to slice to be added.
+		if foundUser == 0 {
+			newUser = append(newUser, *iamUser.UserName)
+		}
+	}
+	//AddUserLinux(newUser)
+	ValidateSSHKey(newUser, svc)
+}
+
+func AddUserLinux(newUsers []string) {
+	for _, user := range newUsers {
+		err := exec.Command("/usr/sbin/useradd", user, "-m", "--shell", DefaultShell).Run()
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func ValidateSSHKey(users []string, svc *iam.IAM) {
+	for _, user := range users {
+		authiam.GetUserSSHKey(svc, user)
+	}
+
 }

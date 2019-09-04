@@ -24,3 +24,14 @@ func GetIAMUsers(svc iamiface.IAMAPI, groupName string) (*iam.GetGroupOutput, er
 
 	return users, nil
 }
+
+func GetUserSSHKey(svc iamiface.IAMAPI, userName string) (*iam.ListSSHPublicKeysOutput, error) {
+	user, err := svc.ListSSHPublicKeys(&iam.ListSSHPublicKeysInput{
+		UserName: aws.String(userName),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
